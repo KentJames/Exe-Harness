@@ -42,7 +42,7 @@ class CLIInterface(object):
         self.command.add_argument('--positional_parameters', required=True, metavar='PP',
                                     help='The positional arguments of the executable.')
         self.command.add_argument('--variable_parameter', required=True, metavar='VP',
-                                    help='A list of parameters to vary, e.g. [--param1, --param2]')
+                                    help='The parameter to vary.')
         self.command.add_argument('--variable_parameters_values',  required=True, metavar='VPV', 
                                     type = lambda s: [item for item in s.split(',')],
                                     help='A list of parameters for each, e.g. var1,var2,var3,varx')
@@ -99,7 +99,7 @@ class ExeProfiler(object):
         return output_list
 
     def _grep_output(self, output_list):
-      
+        #TODO: make generic for any returned value. e.g. multiple values. 
         print(output_list)
         # Oh lord, bless this regex and make it strong lord, so it has the strength to persevere and never fail me.
         # For thine is the text block, string, and wild-card. Amen.
@@ -121,7 +121,7 @@ class ExeProfiler(object):
         return None
 
     def profile_exe(self):
-
+        #TODO:  Make generic for multiple-parameters
         cmd_list = self._build_param_list()
         times_av = []
         average_iter = int(self.args.run_average)
