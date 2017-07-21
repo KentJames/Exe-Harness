@@ -3,6 +3,9 @@
 This is supposed to be a lightweight harness for working on executables, for profiling values which are reported back
 for a given combination of parameters. It is almost generic currently but there is work to be done.
 
+Then outputs to a CSV file. This csv file can be plotted by (shameless plug):
+
+[CSV Plotter](https://github.com/KentJames/CSV-Plotter)
 
 ## To run 
 
@@ -45,3 +48,7 @@ I would like to:
 * Make it more generic for the regex parsing, might be a string,number etc.
 * Allow testing of multiple parameters, i.e more degrees of freedom. Doing this naively could be very costly.
 * Would be cool to optimise a binary of n-parameters for time or something similar. Would require a proper state space exploration algorithm. Perhaps Bayesys?
+
+## License
+
+See LICENSE.txt
