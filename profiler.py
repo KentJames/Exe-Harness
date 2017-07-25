@@ -7,6 +7,7 @@ import math
 import csv
 import os
 import re
+import numpy as np
 
 class CLIInterface(object):
 
@@ -35,17 +36,18 @@ class CLIInterface(object):
                                                             mode is to profile an executable on the command line.'''))
         
         #Add required arguments.
-        self.command.add_argument('filepath',help=
+        self.command.add_argument('--filepath', required=True, metavar='F', help=
 				 ('Executable file path to Profile.'))
         self.command.add_argument('--fixed_parameters', required=True, metavar='FP', help=
                                         ('Appends these to filepath above.'))
         self.command.add_argument('--positional_parameters', required=True, metavar='PP',
                                     help='The positional arguments of the executable.')
-        self.command.add_argument('--variable_parameter', required=True, metavar='VP',
+        self.command.add_argument('--variable_parameters', required=True, metavar='VP',
+                                  type = lambda s: [item for item in s.split(',')],
                                     help='The parameter to vary.')
-        self.command.add_argument('--variable_parameters_values',  required=True, metavar='VPV', 
-                                    type = lambda s: [item for item in s.split(',')],
-                                    help='A list of parameters for each, e.g. var1,var2,var3,varx')
+#        self.command.add_argument('--variable_parameters_values',  required=True, metavar='VPV', 
+#                                    type = lambda s: [item for item in s.split(',')],
+#                                    help='A list of parameters for each, e.g. var1,var2,var3,varx')
         self.command.add_argument('--easy_regex_output', required=False,metavar='ER',
                                     help='Searches for a number after this string. '
                                     'Use --regex-output for more robustness.')
@@ -76,18 +78,61 @@ class ExeProfiler(object):
         self.args = args
         #print(self.args)
         print(self.args.fixed_parameters)
-        self.paramnames = self.args.variable_parameters_values
+#        self.paramnames = self.args.variable_parameters_values
         self.var_param_list = []
 
     def _build_param_list(self):
-        cmd_list = []    
-        for var_param in self.args.variable_parameters_values:
-            arg = "./{} {} {}={} {}".format(self.args.filepath,self.args.fixed_parameters,
-                    self.args.variable_parameter,var_param, self.args.positional_parameters)
-            print(arg)
-            cmd_list.append(arg)
+
+        var_params = []
+        cmd_list = []
+        np_params = []
+    
+        for param in self.args.variable_parameters:
+
+            print("\n Please configure parameter: {}".format(param))
+            start_val = input("Start Value: ")
+            end_val = input("End Value: ")
+            inc_val = input("Increment: ")
+
+            var_params.append((start_val,end_val,inc_val,param))
+
+        if len(var_params) == 2:
+
+            
+
+            X = np.arange(int(var_params[0][0]),int(var_params[0][1]),int(var_params[0][2]))
+            Y = np.arange(int(var_params[1][0]),int(var_params[1][1]),int(var_params[1][2]))
+            np_params = [X,Y]
+            X,Y = np.meshgrid(X,Y)
+
+        
+            print(X)
+            print(Y)
+            print(np_params)
+            for X_i,Y_i in zip(X.flatten(),Y.flatten()):
+                arg = "./{} {} {}={} {}={} {}".format(self.args.filepath,self.args.fixed_parameters,
+                    var_params[0][3],str(X_i),var_params[1][3],str(Y_i), self.args.positional_parameters)
+                print(arg)
+                cmd_list.append(arg)
+                
+            
+        elif len(var_params) > 2:
+            raise AttributeError("More than two-dimensions of parameters detected. Not supported! (yet)")
+        else:
+
+            param = var_params[0]
+
+            np_params = np.arange(float(param[0]),float(param[1]),float(param[2]))
+            
+            for var_param in np_params:
+                arg = "./{} {} {}={} {}".format(self.args.filepath,self.args.fixed_parameters,
+                        param[3],str(var_param), self.args.positional_parameters)
+                print(arg)
+                cmd_list.append(arg)
+
+                
         print(cmd_list)
-        return cmd_list
+        return cmd_list, np_params
 
     def _execute_command(self,command): 
         #TODO: Implement error catching for seg fauls in executable etc.
@@ -122,23 +167,52 @@ class ExeProfiler(object):
 
     def profile_exe(self):
         #TODO:  Make generic for multiple-parameters
-        cmd_list = self._build_param_list()
-        times_av = []
+        cmd_list,params = self._build_param_list()
         average_iter = int(self.args.run_average)
+        outputs= None
 
-        csv = CSVWriter(self.args.output_csv_file,[self.args.variable_parameter,'Time'])
+        csv = CSVWriter(self.args.output_csv_file,['Param','Time'])
 
-        for command,varp in zip(cmd_list,self.args.variable_parameters_values):
-            times = []
-            for run in range(0,average_iter):
-                output = self._execute_command(command)
-                if output:
-                    time = float(self._grep_output(output))
-                    times.append(time)
-            times_av.append(sum(times)/len(times))
-            csv.WritetoFile(self.args.output_csv_file,varp+","+str(sum(times)/len(times)))  
-        outputs = list(zip(self.args.variable_parameters_values,times_av))
+        #This is a bit hacky until I can generalise it to several parameters.
+        if len(params) == 2:
 
+#            print(params[0].size)
+#            print(params[1].size)
+            times_av = np.zeros((params[0].size,params[1].size))
+            i = 0 #This is horrible but I can't think of another way :(
+            for idx_x,xvar in enumerate(params[0]):
+                for idx_y,yvar in enumerate(params[1]):
+                    times = []
+                    for run in range(0,average_iter):
+                        output= self._execute_command(cmd_list[i])
+                        if output:
+                            time = float(self._grep_output(output))
+                            times.append(time)
+                    times_av[idx_x][idx_y] = (sum(times)/len(times))
+                            
+                    i+= 1
+
+            times_av = np.insert(times_av, 0, params[0],axis=1)
+            param1 = np.insert(params[1], 0, 0, axis=0)
+            times_av = np.insert(times_av, 0, param1,axis=0)
+
+            print(times_av)
+            np.savetxt("output.csv",times_av)
+            outputs = times_av
+        else:
+            times_av = []
+            for command,varp in zip(cmd_list,params):
+                times = []
+                for run in range(0,average_iter):
+                    output = self._execute_command(command)
+                    if output:
+                        time = float(self._grep_output(output))
+                        times.append(time)
+                        times_av.append(sum(times)/len(times))
+                        csv.WriteRowtoFile(self.args.output_csv_file,[str(varp),str(sum(times)/len(times))])
+                        outputs = list(zip(params,times_av))
+
+                        
         return outputs
 
 
@@ -162,6 +236,16 @@ class CSVWriter(object):
             perfwriter.writerow(headers)
         print("\nCSV Data File Created: {}".format(filename))
 
+
+    def WriteRowtoFile(sself,filename,data):
+
+        print("Writing Row...")
+
+        with open (filename,'a') as csvfile:
+            perfwriter = csv.writer(csvfile,delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+
+            perfwriter.writerow(data)
+
     def WritetoFile(self,filename,data):
 
         print("Writing to CSV File...") 
@@ -169,17 +253,13 @@ class CSVWriter(object):
         with open (filename,'a') as csvfile:
             perfwriter = csv.writer(csvfile, delimiter=',',quotechar='|',quoting=csv.QUOTE_MINIMAL)
             # Write data 
+            print("Data: {}".format(data))
             if type(data) is list:
                 for item in data:
                     perfwriter.writerow(item)
                     print("Writing finished!")
-            else:
-                perfwriter.writerow(data)
-                print("Writing row finished!")
-
-
-
-
+            else: 
+                print("List expected!!")
 
 
 def main():
